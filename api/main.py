@@ -28,12 +28,12 @@ async def lifespan(app: FastAPI):
     # Initialize database
     from atlas.persistence.database import Database
     db = Database()
-    print("✓ Database initialized")
+    print("Database initialized")
     
     # Initialize check registry
     from atlas.checks.registry import CheckRegistry
     registry = CheckRegistry()
-    print(f"✓ Loaded {len(registry.get_all_checks())} vulnerability checks")
+    print(f"Loaded {len(registry.get_all_checks())} vulnerability checks")
     
     yield
     

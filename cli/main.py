@@ -283,7 +283,7 @@ def checks():
 
 def display_recon_results(results: dict):
     """Display reconnaissance results"""
-    console.print("\n[bold cyan]═══ Reconnaissance Results ═══[/]\n")
+    console.print("\n[bold cyan]=== Reconnaissance Results ===[/]\n")
     
     table = Table(title="Discovered Services")
     table.add_column("Port", style="cyan")
@@ -307,7 +307,7 @@ def display_recon_results(results: dict):
 
 def display_available_checks(checks: list):
     """Display available checks for selection"""
-    console.print("\n[bold cyan]═══ Available Vulnerability Checks ═══[/]\n")
+    console.print("\n[bold cyan]=== Available Vulnerability Checks ===[/]\n")
     
     # Group by category
     by_category = {}
@@ -368,7 +368,7 @@ def prompt_check_selection(checks: list) -> list:
 
 def display_findings(findings: list):
     """Display vulnerability findings"""
-    console.print("\n[bold cyan]═══ Vulnerability Findings ═══[/]\n")
+    console.print("\n[bold cyan]=== Vulnerability Findings ===[/]\n")
     
     if not findings:
         console.print("[green]No vulnerabilities found![/]")
@@ -418,7 +418,7 @@ def demo(
     
     # List presets if none specified
     if not preset:
-        console.print("\n[bold cyan]═══ Available Demo Targets ═══[/]\n")
+        console.print("\n[bold cyan]=== Available Demo Targets ===[/]\n")
         
         presets = list_presets()
         for i, p in enumerate(presets, 1):
@@ -498,7 +498,7 @@ def display_preset_info(target: PresetTarget):
 
 def display_preset_vulnerabilities(target: PresetTarget):
     """Display vulnerabilities grouped by category"""
-    console.print("\n[bold cyan]═══ Known Vulnerabilities ═══[/]\n")
+    console.print("\n[bold cyan]=== Known Vulnerabilities ===[/]\n")
     
     by_cat = target.get_vulnerabilities_by_category()
     
@@ -515,7 +515,7 @@ def display_preset_vulnerabilities(target: PresetTarget):
             }.get(vuln.severity, "white")
             
             console.print(
-                f"  • {vuln.name} "
+                f"  * {vuln.name} "
                 f"[{severity_color}]({vuln.severity.upper()})[/]"
             )
 
@@ -573,7 +573,7 @@ def run_guided_test(vuln: VulnerabilityInfo, target_url: str):
         "info": "blue"
     }.get(vuln.severity, "white")
     
-    console.print(f"\n{'═' * 60}")
+    console.print(f"\n{'=' * 60}")
     console.print(f"\n[bold {severity_color}]Testing: {vuln.name}[/]")
     console.print(f"[dim]OWASP:[/] {vuln.owasp_category or 'N/A'}")
     console.print(f"[dim]CWE:[/] {vuln.cwe_id or 'N/A'}")
@@ -632,10 +632,10 @@ def run_automated_check(check_id: str, target_url: str):
         result = asyncio.run(do_check())
         
         if result.is_vulnerable:
-            console.print(f"\n[bold red]✗ VULNERABLE[/]")
+            console.print(f"\n[bold red]VULNERABLE[/]")
             console.print(f"[dim]Evidence:[/] {result.evidence[:300] if result.evidence else 'N/A'}")
         else:
-            console.print(f"\n[bold green]✓ Not vulnerable or inconclusive[/]")
+            console.print(f"\n[bold green]Not vulnerable or inconclusive[/]")
             if result.error_message:
                 console.print(f"[dim]Note:[/] {result.error_message}")
     except Exception as e:
@@ -648,7 +648,7 @@ def presets():
     List available demo preset targets.
     """
     print_banner()
-    console.print("\n[bold cyan]═══ Demo Preset Targets ═══[/]\n")
+    console.print("\n[bold cyan]=== Demo Preset Targets ===[/]\n")
     
     for preset in list_presets():
         console.print(f"[bold]{preset.id}[/]: {preset.name}")

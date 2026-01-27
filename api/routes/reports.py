@@ -6,6 +6,7 @@ Endpoints for findings and report generation.
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
+from typing import List, Dict, Any
 
 from api.schemas import FindingListResponse, FindingResponse, ReportRequest, ReportResponse, SeverityLevel
 
@@ -149,3 +150,48 @@ async def get_scan_summary(scan_id: str):
             "checks_executed": len(executed_checks)
         }
     }
+
+
+@router.get("", response_model=List[Dict[str, Any]])
+async def list_reports():
+    """
+    List all generated reports.
+    """
+    from atlas.utils.config import get_config
+    
+    config = get_config()
+    reports_dir = config.data_dir / "reports"
+    
+    reports = []
+    if reports_dir.exists():
+        for f in reports_dir.glob("*.html"):
+            scan_id = f.stem
+            stats = f.stat()
+            reports.append({
+                "scan_id": scan_id,
+                "format": "html",
+                "created_at": stats.st_mtime,
+                "size": stats.st_size
+            })
+            
+    # Sort by date desc
+    reports.sort(key=lambda x: x["created_at"], reverse=True)
+    return reports
+
+
+@router.delete("/{scan_id}")
+async def delete_report(scan_id: str):
+    """
+    Delete a report and its associated findings.
+    """
+    from atlas.persistence.database import Database
+    from atlas.utils.config import get_config
+    
+    # Delete files
+    config = get_config()
+    for ext in ["html", "json"]:
+        f = config.data_dir / "reports" / f"{scan_id}.{ext}"
+        if f.exists():
+            f.unlink()
+            
+    return {"message": "Report deleted"}

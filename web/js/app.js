@@ -60,6 +60,8 @@ function showPage(pageName) {
         resetScanWizard();
     } else if (pageName === 'demo') {
         loadDemoTargets();
+    } else if (pageName === 'reports') {
+        loadReports();
     }
 
     window.location.hash = pageName;
@@ -238,7 +240,7 @@ function displayReconResults(results) {
 
     // Show fingerprint if detected
     if (results.fingerprint) {
-        fingerprintBadge.textContent = `🎯 Target Identified: ${results.fingerprint}`;
+        fingerprintBadge.textContent = `Target Identified: ${results.fingerprint}`;
         fingerprintBadge.style.display = 'inline-block';
     } else {
         fingerprintBadge.style.display = 'none';
@@ -462,6 +464,76 @@ async function downloadReport() {
 
     } catch (error) {
         alert('Failed to generate report: ' + error.message);
+    }
+}
+
+// ========== Reports Page ==========
+
+async function loadReports() {
+    try {
+        // Fetch reports list (we'll use the scans list effectively for now as reports correspond to scans)
+        const { scans } = await apiRequest('/scans?limit=50');
+        const container = document.querySelector('#page-reports .card');
+
+        if (scans.length === 0) {
+            container.innerHTML = '<p class="empty-state">No scans found.</p>';
+            return;
+        }
+
+        container.innerHTML = `
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Scan ID</th>
+                            <th>Target</th>
+                            <th>Date</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${scans.map(scan => `
+                            <tr>
+                                <td><code>${scan.id}</code></td>
+                                <td>${truncate(scan.target, 50)}</td>
+                                <td>${formatDate(scan.created_at)}</td>
+                                <td><span class="status-${scan.status}">${scan.status}</span></td>
+                                <td>
+                                    <button class="btn btn-sm" onclick="downloadReportId('${scan.id}')">Download</button>
+                                    <button class="btn btn-sm btn-secondary" style="color: var(--severity-critical); border-color: var(--severity-critical);" onclick="deleteReport('${scan.id}')">Delete</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    } catch (error) {
+        console.error('Failed to load reports:', error);
+    }
+}
+
+async function downloadReportId(scanId) {
+    try {
+        await apiRequest(`/reports/${scanId}/generate`, {
+            method: 'POST',
+            body: JSON.stringify({ format: 'html' })
+        });
+        window.open(`${API_BASE}/reports/${scanId}/download?format=html`, '_blank');
+    } catch (error) {
+        alert('Failed to generate report');
+    }
+}
+
+async function deleteReport(scanId) {
+    if (!confirm('Are you sure you want to delete this report?')) return;
+
+    try {
+        await apiRequest(`/reports/${scanId}`, { method: 'DELETE' });
+        loadReports(); // Reload list
+    } catch (error) {
+        alert('Failed to delete report: ' + error.message);
     }
 }
 
