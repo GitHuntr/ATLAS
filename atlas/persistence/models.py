@@ -204,6 +204,41 @@ class Finding:
 
 
 @dataclass
+class User:
+    """User account for authentication"""
+    
+    id: str
+    username: str
+    email: str
+    name: str
+    password_hash: str
+    role: str = "user"
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "username": self.username,
+            "email": self.email,
+            "name": self.name,
+            "role": self.role,
+            "created_at": self.created_at.isoformat()
+        }
+    
+    @classmethod
+    def from_row(cls, row: tuple) -> "User":
+        return cls(
+            id=row[0],
+            username=row[1],
+            email=row[2],
+            name=row[3],
+            password_hash=row[4],
+            role=row[5],
+            created_at=datetime.fromisoformat(row[6]) if row[6] else datetime.utcnow()
+        )
+
+
+@dataclass
 class TargetInfo:
     """Information about a scan target"""
     

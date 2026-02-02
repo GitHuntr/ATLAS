@@ -16,7 +16,7 @@ from atlas.utils.logger import get_logger
 from atlas.utils.config import get_config
 from atlas.persistence.models import (
     ScanSession, ReconResult, ExecutedCheck, Finding,
-    Severity, CheckStatus
+    Severity, CheckStatus, User
 )
 
 logger = get_logger(__name__)
@@ -134,6 +134,21 @@ class Database:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_checks_scan ON executed_checks(scan_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_findings_scan ON findings(scan_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_findings_severity ON findings(severity)")
+            
+            # Users table for authentication
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id TEXT PRIMARY KEY,
+                    username TEXT UNIQUE NOT NULL,
+                    email TEXT UNIQUE NOT NULL,
+                    name TEXT NOT NULL,
+                    password_hash TEXT NOT NULL,
+                    role TEXT DEFAULT 'user',
+                    created_at TEXT NOT NULL
+                )
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)")
     
     # ========== Scan Sessions ==========
     
@@ -372,3 +387,78 @@ class Database:
                 (scan_id,)
             )
             return {row[0]: row[1] for row in cursor.fetchall()}
+    
+    # ========== Users ==========
+    
+    def create_user(self, user: User) -> User:
+        """Create a new user"""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO users (id, username, email, name, password_hash, role, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                user.id,
+                user.username,
+                user.email,
+                user.name,
+                user.password_hash,
+                user.role,
+                user.created_at.isoformat()
+            ))
+        logger.info(f"Created user: {user.username}")
+        return user
+    
+    def get_user_by_username(self, username: str) -> Optional[User]:
+        """Get user by username"""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT id, username, email, name, password_hash, role, created_at FROM users WHERE username = ?",
+                (username,)
+            )
+            row = cursor.fetchone()
+            if row:
+                return User.from_row(tuple(row))
+        return None
+    
+    def get_user_by_email(self, email: str) -> Optional[User]:
+        """Get user by email"""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT id, username, email, name, password_hash, role, created_at FROM users WHERE email = ?",
+                (email,)
+            )
+            row = cursor.fetchone()
+            if row:
+                return User.from_row(tuple(row))
+        return None
+    
+    def get_user_by_id(self, user_id: str) -> Optional[User]:
+        """Get user by ID"""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT id, username, email, name, password_hash, role, created_at FROM users WHERE id = ?",
+                (user_id,)
+            )
+            row = cursor.fetchone()
+            if row:
+                return User.from_row(tuple(row))
+        return None
+    
+    def username_exists(self, username: str) -> bool:
+        """Check if username exists"""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1 FROM users WHERE username = ?", (username,))
+            return cursor.fetchone() is not None
+    
+    def email_exists(self, email: str) -> bool:
+        """Check if email exists"""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1 FROM users WHERE email = ?", (email,))
+            return cursor.fetchone() is not None
+

@@ -92,6 +92,52 @@ async def signup_page():
     return HTMLResponse(content="<h1>Signup page not found</h1>", status_code=404)
 
 
+@app.get("/about", response_class=HTMLResponse)
+async def about_page():
+    """Serve About Team page"""
+    about_path = web_dir / "about_team.html"
+    if about_path.exists():
+        return HTMLResponse(content=about_path.read_text(encoding='utf-8'))
+    return HTMLResponse(content="<h1>About page not found</h1>", status_code=404)
+
+
+@app.get("/loading", response_class=HTMLResponse)
+async def loading_page():
+    """Serve loading screen"""
+    loading_path = web_dir / "loading.html"
+    if loading_path.exists():
+        return HTMLResponse(content=loading_path.read_text(encoding='utf-8'))
+    return HTMLResponse(content="<h1>Loading...</h1>")
+
+
+# Test routes to preview error pages
+@app.get("/test/404", response_class=HTMLResponse)
+async def test_404_page():
+    """Preview 404 error page"""
+    error_path = web_dir / "error" / "404.html"
+    if error_path.exists():
+        return HTMLResponse(content=error_path.read_text(encoding='utf-8'))
+    return HTMLResponse(content="<h1>404 page not found</h1>")
+
+
+@app.get("/test/500", response_class=HTMLResponse)
+async def test_500_page():
+    """Preview 500 error page"""
+    error_path = web_dir / "error" / "500.html"
+    if error_path.exists():
+        return HTMLResponse(content=error_path.read_text(encoding='utf-8'))
+    return HTMLResponse(content="<h1>500 page not found</h1>")
+
+
+@app.get("/test/403", response_class=HTMLResponse)
+async def test_403_page():
+    """Preview 403 error page"""
+    error_path = web_dir / "error" / "403.html"
+    if error_path.exists():
+        return HTMLResponse(content=error_path.read_text(encoding='utf-8'))
+    return HTMLResponse(content="<h1>403 page not found</h1>")
+
+
 @app.get("/", response_class=HTMLResponse)
 async def root():
     """Serve main Web UI"""
@@ -134,9 +180,42 @@ async def health_check():
     }
 
 
+# Custom error handlers
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+@app.exception_handler(404)
+async def not_found_handler(request: Request, exc: StarletteHTTPException):
+    """Custom 404 error handler"""
+    error_path = web_dir / "error" / "404.html"
+    if error_path.exists():
+        return HTMLResponse(content=error_path.read_text(encoding='utf-8'), status_code=404)
+    return JSONResponse(status_code=404, content={"error": "Not Found", "detail": str(exc.detail)})
+
+
+@app.exception_handler(403)
+async def forbidden_handler(request: Request, exc: StarletteHTTPException):
+    """Custom 403 error handler"""
+    error_path = web_dir / "error" / "403.html"
+    if error_path.exists():
+        return HTMLResponse(content=error_path.read_text(encoding='utf-8'), status_code=403)
+    return JSONResponse(status_code=403, content={"error": "Forbidden", "detail": str(exc.detail)})
+
+
+@app.exception_handler(500)
+async def server_error_handler(request: Request, exc: Exception):
+    """Custom 500 error handler"""
+    error_path = web_dir / "error" / "500.html"
+    if error_path.exists():
+        return HTMLResponse(content=error_path.read_text(encoding='utf-8'), status_code=500)
+    return JSONResponse(status_code=500, content={"error": "Internal Server Error", "detail": str(exc)})
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Global exception handler"""
+    error_path = web_dir / "error" / "500.html"
+    if error_path.exists():
+        return HTMLResponse(content=error_path.read_text(encoding='utf-8'), status_code=500)
     return JSONResponse(
         status_code=500,
         content={
@@ -154,3 +233,4 @@ if __name__ == "__main__":
         port=8000,
         reload=True
     )
+
