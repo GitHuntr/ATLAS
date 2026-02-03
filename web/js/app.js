@@ -129,6 +129,8 @@ function showPage(pageName) {
         loadDemoTargets();
     } else if (pageName === 'reports') {
         loadReports();
+    } else if (pageName === 'profile') {
+        loadProfile();
     }
 
     window.location.hash = pageName;
@@ -890,9 +892,40 @@ async function handleLogout() {
 }
 
 /**
- * Show profile modal (placeholder)
+ * Load user profile data into profile page
  */
-function showProfileModal() {
-    const user = currentUser || {};
-    alert(`Profile\n\nName: ${user.name || 'N/A'}\nUsername: ${user.username || 'N/A'}\nRole: ${user.role || 'N/A'}`);
+function loadProfile() {
+    if (!currentUser) return;
+
+    // Update Avatar
+    const avatarEl = document.getElementById('profile-page-avatar');
+    if (avatarEl && currentUser.name) {
+        avatarEl.textContent = currentUser.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+    }
+
+    // Update Text Fields
+    const fields = {
+        'profile-page-name': currentUser.name,
+        'profile-page-username': currentUser.username,
+        'profile-page-email': currentUser.email || 'No email provided',
+        'profile-page-joined': currentUser.created_at ? formatDate(currentUser.created_at) : 'Feb 2026'
+    };
+
+    for (const [id, value] of Object.entries(fields)) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value;
+    }
+
+    // Update Role Badge
+    const roleBadge = document.getElementById('profile-page-role');
+    if (roleBadge && currentUser.role) {
+        roleBadge.textContent = currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1);
+        roleBadge.className = 'user-role-badge ' + (currentUser.role === 'admin' ? 'admin' : 'pentester');
+    }
+
+    // Attach event listeners for buttons if not already attached
+    // (Simple implementation: re-attaching is fine or check attribute)
+    document.querySelectorAll('.settings-card button').forEach(btn => {
+        btn.onclick = () => alert('This feature is coming soon!');
+    });
 }

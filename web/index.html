@@ -152,7 +152,7 @@
                         </svg>
                     </div>
                     <div class="user-dropdown" id="user-dropdown">
-                        <a href="#profile" class="dropdown-item" onclick="showProfileModal()">
+                        <a href="#profile" class="dropdown-item" onclick="showPage('profile')">
                             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
                                 stroke-width="2">
                                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
@@ -439,6 +439,71 @@
 
                 <div class="card">
                     <p class="empty-state">Select a completed scan from the dashboard to view its report.</p>
+                </div>
+            </section>
+
+            <!-- Profile Page -->
+            <section id="page-profile" class="page">
+                <header class="page-header">
+                    <h2>User Profile</h2>
+                </header>
+
+                <div class="profile-grid">
+                    <!-- User Details Card -->
+                    <div class="card profile-card">
+                        <div class="profile-header">
+                            <div class="profile-avatar" id="profile-page-avatar"></div>
+                            <div class="profile-info">
+                                <h3 id="profile-page-name">Loading...</h3>
+                                <span class="user-role-badge" id="profile-page-role">--</span>
+                            </div>
+                        </div>
+                        <div class="profile-details">
+                            <div class="detail-item">
+                                <span class="detail-label">Username</span>
+                                <span class="detail-value" id="profile-page-username">--</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Email</span>
+                                <span class="detail-value" id="profile-page-email">--</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Member Since</span>
+                                <span class="detail-value" id="profile-page-joined">Just now</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Settings Card -->
+                    <div class="card settings-card">
+                        <h3>Account Settings</h3>
+                        <div class="settings-list">
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <h4>Profile Information</h4>
+                                    <p>Update your personal details</p>
+                                </div>
+                                <button class="btn btn-secondary">Edit Profile</button>
+                            </div>
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <h4>Security</h4>
+                                    <p>Change your password</p>
+                                </div>
+                                <button class="btn btn-secondary">Change Password</button>
+                            </div>
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <h4>Notifications</h4>
+                                    <p>Manage email alerts</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" checked>
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </section>
         </main>
