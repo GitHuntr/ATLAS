@@ -7,7 +7,7 @@
 const API_BASE = '/api';
 
 // State
-let currentScanId = null;
+let currentScanId = sessionStorage.getItem('atlas_scan_id') || null;
 let selectedChecks = new Set();
 let allChecks = [];
 let currentUser = null;
@@ -214,6 +214,7 @@ async function loadDashboard() {
 
 function resetScanWizard() {
     currentScanId = null;
+    sessionStorage.removeItem('atlas_scan_id');
     selectedChecks.clear();
     document.getElementById('target-input').value = '';
     goToStep(1);
@@ -264,6 +265,7 @@ async function startScan() {
         });
 
         currentScanId = scan.id;
+        sessionStorage.setItem('atlas_scan_id', scan.id);
 
         // Move to recon step
         goToStep(2);
@@ -285,28 +287,111 @@ async function runReconnaissance() {
     // Animate progress
     let progress = 0;
     const progressInterval = setInterval(() => {
-        progress = Math.min(progress + 5, 90);
+        progress = Math.min(progress + 2, 90);
         progressFill.style.width = `${progress}%`;
-    }, 200);
+    }, 500);
 
     try {
         statusText.textContent = 'Scanning ports and services...';
 
-        const results = await apiRequest(`/scans/${currentScanId}/recon`, {
-            method: 'POST'
-        });
+        // Fire-and-forget: kick off recon in background
+        fetch(`${API_BASE}/scans/${currentScanId}/recon`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        }).catch(() => { });
+
+        // Poll scan status until recon completes (30s timeout)
+        const results = await pollScanPhase('SELECTION', statusText, [
+            'Scanning ports and services...',
+            'Enumerating service versions...',
+            'Fingerprinting target...',
+            'Analyzing discovered services...'
+        ], 15); // 15 attempts × 2s = 30s timeout
 
         clearInterval(progressInterval);
         progressFill.style.width = '100%';
         statusText.textContent = 'Reconnaissance complete!';
 
         // Display results
-        displayReconResults(results);
+        if (results && results.recon) {
+            displayReconResults(results.recon);
+        } else {
+            try {
+                const scanData = await apiRequest(`/scans/${currentScanId}`);
+                displayReconResults({
+                    host: scanData.target,
+                    ports: [],
+                    services: {},
+                    fingerprint: null
+                });
+            } catch (e) {
+                displayReconResults({ host: '', ports: [], services: {}, fingerprint: null });
+            }
+        }
 
     } catch (error) {
         clearInterval(progressInterval);
-        statusText.textContent = 'Reconnaissance failed: ' + error.message;
+
+        if (error.message.includes('timed out')) {
+            progressFill.style.width = '100%';
+            progressFill.style.background = 'var(--severity-medium, #f39c12)';
+            statusText.innerHTML = `
+                <span style="color: var(--severity-medium, #f39c12)">⏱ Reconnaissance timed out</span>
+                <br><small style="opacity:0.7">Target may be unreachable or scanning is still running in background.</small>
+                <br><button class="btn btn-sm" style="margin-top:8px" onclick="skipToCheckSelection()">Skip → Select Checks Manually</button>
+            `;
+        } else {
+            statusText.textContent = 'Reconnaissance failed: ' + error.message;
+        }
     }
+}
+
+/**
+ * Skip recon and go straight to check selection.
+ */
+async function skipToCheckSelection() {
+    goToStep(3);
+    await loadApplicableChecks();
+}
+
+/**
+ * Poll scan status until a target phase is reached.
+ * @param {string} targetPhase - Phase to wait for (uppercase)
+ * @param {HTMLElement} statusEl - Status text element to update
+ * @param {string[]} messages - Cycling status messages
+ * @param {number} maxAttempts - Max poll attempts (default 15 = 30s)
+ * @returns {object} Progress data
+ */
+async function pollScanPhase(targetPhase, statusEl, messages, maxAttempts = 15) {
+    let attempt = 0;
+    let msgIdx = 0;
+
+    while (attempt < maxAttempts) {
+        await new Promise(r => setTimeout(r, 2000));
+        attempt++;
+
+        // Cycle status messages
+        if (messages && messages.length > 0 && attempt % 3 === 0) {
+            msgIdx = (msgIdx + 1) % messages.length;
+            if (statusEl) statusEl.textContent = messages[msgIdx];
+        }
+
+        try {
+            const progress = await apiRequest(`/scans/${currentScanId}`);
+
+            const phaseOrder = ['IDLE', 'INITIALIZING', 'RECON', 'SELECTION', 'TESTING', 'REPORTING', 'COMPLETED', 'ERROR'];
+            const currentIdx = phaseOrder.indexOf(progress.phase);
+            const targetIdx = phaseOrder.indexOf(targetPhase);
+
+            if (currentIdx >= targetIdx || progress.phase === 'ERROR') {
+                return progress;
+            }
+        } catch (e) {
+            console.debug('Poll attempt failed, retrying...', e);
+        }
+    }
+
+    throw new Error('Request timed out — target may be unreachable');
 }
 
 function displayReconResults(results) {
@@ -445,21 +530,77 @@ async function executeChecks() {
 
         addLogEntry('Checks selected, starting execution...', 'info');
 
-        // Execute checks
-        const { findings, total } = await apiRequest(`/scans/${currentScanId}/execute`, {
-            method: 'POST'
-        });
+        // Fire-and-forget: kick off execution in background
+        fetch(`${API_BASE}/scans/${currentScanId}/execute`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        }).catch(() => { });
 
-        execProgress.style.width = '100%';
-        execCurrent.textContent = selectedChecks.size;
+        // Poll for completion with live progress updates
+        const totalChecks = selectedChecks.size;
+        let lastCompleted = 0;
+        const checkNames = Array.from(selectedChecks);
 
-        addLogEntry(`Execution complete. Found ${findings.length} vulnerabilities.`,
-            findings.length > 0 ? 'error' : 'success');
+        const maxPollAttempts = 30; // 30 * 2s = 60s max
+        let pollAttempt = 0;
 
-        // Show results after short delay
-        setTimeout(() => {
-            displayResults(findings);
-        }, 1000);
+        while (pollAttempt < maxPollAttempts) {
+            await new Promise(r => setTimeout(r, 2000));
+            pollAttempt++;
+
+            try {
+                const progress = await apiRequest(`/scans/${currentScanId}`);
+
+                const completed = progress.completed_checks || 0;
+                const pct = totalChecks > 0 ? Math.round((completed / totalChecks) * 100) : 0;
+
+                execProgress.style.width = `${pct}%`;
+                execCurrent.textContent = completed;
+
+                // Log newly completed checks
+                if (completed > lastCompleted) {
+                    for (let i = lastCompleted; i < completed && i < checkNames.length; i++) {
+                        addLogEntry(`✓ Completed: ${checkNames[i]}`, 'success');
+                    }
+                    lastCompleted = completed;
+                }
+
+                if (progress.current_check) {
+                    addLogEntry(`Running: ${progress.current_check}...`, 'info');
+                }
+
+                // Check if execution is complete (phase moved to reporting/complete)
+                const phaseOrder = ['IDLE', 'INITIALIZING', 'RECON', 'SELECTION', 'TESTING', 'REPORTING', 'COMPLETED', 'ERROR'];
+                const phaseIdx = phaseOrder.indexOf(progress.phase);
+                if (phaseIdx >= phaseOrder.indexOf('REPORTING')) {
+                    // Execution done — fetch findings
+                    execProgress.style.width = '100%';
+                    execCurrent.textContent = totalChecks;
+
+                    // Fetch the actual findings from the scan
+                    let findings = [];
+                    try {
+                        const report = await apiRequest(`/reports/${currentScanId}/findings`);
+                        findings = report.findings || [];
+                    } catch (e) {
+                        // Fallback: findings_count from progress
+                        addLogEntry(`Completed with ${progress.findings_count || 0} findings`, 'info');
+                    }
+
+                    addLogEntry(`Execution complete. Found ${findings.length} vulnerabilities.`,
+                        findings.length > 0 ? 'error' : 'success');
+
+                    setTimeout(() => {
+                        displayResults(findings);
+                    }, 1000);
+                    return;
+                }
+            } catch (e) {
+                console.debug('Execution poll failed, retrying...', e);
+            }
+        }
+
+        addLogEntry('⏱ Execution timed out — checks may still be running in the background. Try viewing this scan from the Dashboard later.', 'error');
 
     } catch (error) {
         addLogEntry('Execution failed: ' + error.message, 'error');
@@ -1025,8 +1166,58 @@ function escapeHtml(text) {
 }
 
 async function viewScan(scanId) {
-    // TODO: Implement scan details view
-    alert('View scan details: ' + scanId);
+    try {
+        showLoading('Loading scan...');
+        currentScanId = scanId;
+        sessionStorage.setItem('atlas_scan_id', scanId);
+
+        const progress = await apiRequest(`/scans/${scanId}`);
+        hideLoading();
+
+        showPage('new-scan');
+
+        // Map scan phase to wizard step
+        const phaseToStep = {
+            'IDLE': 1,
+            'INITIALIZING': 1,
+            'RECON': 2,
+            'SELECTION': 3,
+            'TESTING': 4,
+            'REPORTING': 5,
+            'COMPLETED': 5,
+            'ERROR': 1
+        };
+
+        const step = phaseToStep[progress.phase] || 1;
+
+        // Set the target input
+        document.getElementById('target-input').value = progress.target || '';
+
+        if (step === 1) {
+            goToStep(1);
+        } else if (step === 2) {
+            goToStep(2);
+            // Recon is in progress, poll for it
+            await runReconnaissance();
+        } else if (step >= 3) {
+            // Recon done, go to selection
+            goToStep(3);
+            await loadApplicableChecks();
+
+            if (step >= 4 && progress.findings_count > 0) {
+                // Already has results, jump to results
+                try {
+                    const report = await apiRequest(`/reports/${scanId}/findings`);
+                    displayResults(report.findings || []);
+                } catch (e) {
+                    goToStep(3); // Fallback to selection
+                }
+            }
+        }
+    } catch (error) {
+        hideLoading();
+        alert('Failed to load scan: ' + error.message);
+    }
 }
 
 async function resumeScan(scanId) {
